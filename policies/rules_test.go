@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/getplumber/plumber/collector"
+	githubpkg "github.com/getplumber/plumber/github"
 	opaengine "github.com/getplumber/plumber/internal/engine/opa"
 	"github.com/getplumber/plumber/internal/ir"
 	"github.com/getplumber/plumber/policies"
@@ -377,7 +377,7 @@ func TestIssue509_ExcessivePermissions(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -500,7 +500,7 @@ func TestIssue414_DangerousTriggers(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -559,6 +559,44 @@ func TestIssue206_TemplateInjection(t *testing.T) {
 			fixture:      "clean_event_fork.yml",
 			expectedHits: nil,
 		},
+		{
+			// Base-repo default_branch is admin metadata, not
+			// attacker-controlled (#230). Must not fire.
+			fixture:      "clean_base_default_branch.yml",
+			expectedHits: nil,
+		},
+		{
+			// Fork's default_branch is attacker-renamable; must
+			// still fire (#230).
+			fixture:      "violation_fork_default_branch.yml",
+			expectedHits: []string{"violation_fork_default_branch/bad"},
+		},
+		{
+			// workflow_run head_repository is the fork on a fork-PR
+			// run; its default_branch is attacker-controlled (#230).
+			fixture:      "violation_workflow_run_default_branch.yml",
+			expectedHits: []string{"violation_workflow_run_default_branch/bad"},
+		},
+		{
+			// Safe sink (#229): toJSON + quoted heredoc. Must not fire.
+			fixture:      "clean_tojson_quoted_heredoc.yml",
+			expectedHits: nil,
+		},
+		{
+			// toJSON alone (no heredoc): $() still fires. Must fire (#229).
+			fixture:      "violation_tojson_no_heredoc.yml",
+			expectedHits: []string{"violation_tojson_no_heredoc/bad"},
+		},
+		{
+			// Quoted heredoc alone (raw expr): EOF breakout. Must fire (#229).
+			fixture:      "violation_raw_in_quoted_heredoc.yml",
+			expectedHits: []string{"violation_raw_in_quoted_heredoc/bad"},
+		},
+		{
+			// Unquoted heredoc still expands $(). Must fire (#229).
+			fixture:      "violation_tojson_unquoted_heredoc.yml",
+			expectedHits: []string{"violation_tojson_unquoted_heredoc/bad"},
+		},
 	}
 
 	engine := opaengine.New()
@@ -582,7 +620,7 @@ func TestIssue206_TemplateInjection(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -648,7 +686,7 @@ func TestIssue208_InsecureCommands(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -714,7 +752,7 @@ func TestIssue307_Artipacked(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -1623,7 +1661,7 @@ func TestIssue410_GitHubContinueOnError(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -1681,9 +1719,9 @@ func TestIssue404_WildcardForbiddenVersion(t *testing.T) {
 	pipeline := &ir.NormalizedPipeline{
 		Provider: ir.ProviderGitLab,
 		Includes: []ir.Include{
-			{Kind: "component", Source: "plumber/a", Ref: "v1.0.0"},  // matches v*
-			{Kind: "component", Source: "plumber/b", Ref: "1.0.0"},   // no match
-			{Kind: "hardcoded", Source: "plumber/c", Ref: "v9.9.9"},  // skipped (kind)
+			{Kind: "component", Source: "plumber/a", Ref: "v1.0.0"}, // matches v*
+			{Kind: "component", Source: "plumber/b", Ref: "1.0.0"},  // no match
+			{Kind: "hardcoded", Source: "plumber/c", Ref: "v9.9.9"}, // skipped (kind)
 		},
 	}
 	findings, err := engine.Evaluate(context.Background(), pipeline, cfg)
@@ -1722,7 +1760,7 @@ func TestIssue204_SourceAndDotSourcing(t *testing.T) {
 			{Name: "src", Scripts: []string{`source ${CI_COMMIT_MESSAGE}`}},
 			{Name: "dot", Scripts: []string{`. ${CI_COMMIT_MESSAGE}`}},
 			{Name: "comment", Scripts: []string{`# eval $CI_COMMIT_MESSAGE`}}, // skipped
-			{Name: "echo", Scripts: []string{`echo $CI_COMMIT_MESSAGE`}},     // safe
+			{Name: "echo", Scripts: []string{`echo $CI_COMMIT_MESSAGE`}},      // safe
 		},
 	}
 	findings, err := engine.Evaluate(context.Background(), pipeline, cfg)
@@ -1793,7 +1831,7 @@ func TestIssue412_DindLatestAndRegistryPrefix(t *testing.T) {
 		Jobs: []ir.Job{
 			{Name: "latest", Services: []ir.Image{{Name: "docker", Tag: "latest"}}},
 			{Name: "registry-dind", Services: []ir.Image{{Name: "registry.gitlab.com/group/docker", Tag: "dind"}}},
-			{Name: "bare-docker", Services: []ir.Image{{Name: "docker"}}},        // no tag → not dind
+			{Name: "bare-docker", Services: []ir.Image{{Name: "docker"}}},            // no tag → not dind
 			{Name: "nginx-dind", Services: []ir.Image{{Name: "nginx", Tag: "dind"}}}, // wrong name → not dind
 		},
 	}
@@ -1995,7 +2033,7 @@ jobs:
 	if err := os.WriteFile(filepath.Join(wfDir, "debug.yml"), []byte(workflow), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pipeline, partial, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+	pipeline, partial, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 	if err != nil || len(partial) != 0 {
 		t.Fatalf("scan: err=%v partial=%v", err, partial)
 	}
@@ -2371,7 +2409,7 @@ func TestIssue302_SecretsInherit(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2430,7 +2468,7 @@ func TestIssue301_OverprovisionedSecrets(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2490,7 +2528,7 @@ func TestIssue209_GitHubEnvInjection(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2549,7 +2587,7 @@ func TestIssue105_ContainerHardcodedCredentials(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2655,7 +2693,7 @@ func TestIssue210_BotConditions(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2712,7 +2750,7 @@ func TestIssue303_UnredactedSecrets(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2771,7 +2809,7 @@ func TestIssue106_CachePoisoning(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2826,7 +2864,7 @@ func TestIssue601_AnonymousDefinition(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2878,7 +2916,7 @@ func TestIssue602_MissingConcurrency(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -2966,7 +3004,7 @@ func runGitHubFixtureCasesWithConfig(t *testing.T, code string, cases []struct {
 			if err := os.WriteFile(filepath.Join(wfDir, tc.fixture), data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -3066,7 +3104,7 @@ func TestIssue606_DependabotInsecureExec(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(tmp, ".github", "workflows", "w.yml"), minimal, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -3149,7 +3187,7 @@ func TestIssue607_DependabotMissingCooldown(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(tmp, ".github", "workflows", "w.yml"), minimal, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			pipeline, _, err := collector.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
+			pipeline, _, err := githubpkg.ScanGitHubWorkflows("owner/repo", "main", tmp, "", false)
 			if err != nil {
 				t.Fatalf("scan: %v", err)
 			}
@@ -3442,6 +3480,228 @@ func TestIssue108_ActionArchivedRepo(t *testing.T) {
 			if f.Code == "ISSUE-702" {
 				t.Fatalf("ISSUE-702 must abstain when metadata is missing; got %+v", f)
 			}
+		}
+	})
+}
+
+// TestIssue713_ActionAuthorizedSources exercises the authorized-sources
+// supply-chain rule across its trust paths: GitHub-official owners, an
+// exact/wildcard allowlist, and a minimum-stars floor — plus the
+// negative cases (unauthorized owner fires) and the abstain cases
+// (local/docker refs, missing config, missing star metadata).
+func TestIssue713_ActionAuthorizedSources(t *testing.T) {
+	engine := opaengine.New()
+	if err := engine.LoadFromFS(policies.FS); err != nil {
+		t.Fatalf("load embedded policies: %v", err)
+	}
+
+	// hits713 evaluates a single-job pipeline and returns the set of
+	// `uses` values flagged by ISSUE-713.
+	hits713 := func(t *testing.T, cfg map[string]any, actions []ir.Action, reusable string) []string {
+		t.Helper()
+		job := ir.Job{Name: "build", Uses: actions, ReusableWorkflowUses: reusable}
+		pipeline := &ir.NormalizedPipeline{Provider: ir.ProviderGitHub, Jobs: []ir.Job{job}}
+		findings, err := engine.Evaluate(context.Background(), pipeline, cfg)
+		if err != nil {
+			t.Fatalf("evaluate: %v", err)
+		}
+		var out []string
+		for _, f := range findings {
+			if f.Code != "ISSUE-713" {
+				continue
+			}
+			if uses, ok := f.Data["uses"].(string); ok {
+				out = append(out, uses)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+
+	// Default-shaped config: official trusted, an exact and a wildcard
+	// allowlist entry, no star floor.
+	allowlistCfg := map[string]any{
+		"githubActionMustComeFromAuthorizedSources": map[string]any{
+			"trustGithubOfficialActions": true,
+			"minimumStars":               0,
+			"trustedGithubActions":       []any{"mycompany/*", "jdx/mise-action"},
+		},
+	}
+
+	t.Run("official and allowlisted actions stay silent", func(t *testing.T) {
+		got := hits713(t, allowlistCfg, []ir.Action{
+			{Uses: "actions/checkout@v4"},
+			{Uses: "github/codeql-action@v3"},
+			{Uses: "mycompany/internal-action@v1"},
+			{Uses: "mycompany/another/path@abc123"}, // composite ref under wildcard
+			{Uses: "jdx/mise-action@v2"},
+		}, "")
+		if len(got) != 0 {
+			t.Fatalf("expected no findings, got %v", got)
+		}
+	})
+
+	t.Run("unauthorized owner fires", func(t *testing.T) {
+		got := hits713(t, allowlistCfg, []ir.Action{
+			{Uses: "actions/checkout@v4"},   // trusted (official)
+			{Uses: "random/evil-action@v1"}, // not trusted
+			{Uses: "jdx/other-action@v1"},   // jdx exact entry is mise-action only
+		}, "")
+		want := []string{"jdx/other-action@v1", "random/evil-action@v1"}
+		if !stringSlicesEqual(got, want) {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	})
+
+	t.Run("official trust can be disabled", func(t *testing.T) {
+		cfg := map[string]any{
+			"githubActionMustComeFromAuthorizedSources": map[string]any{
+				"trustGithubOfficialActions": false,
+				"minimumStars":               0,
+				"trustedGithubActions":       []any{"mycompany/*"},
+			},
+		}
+		got := hits713(t, cfg, []ir.Action{{Uses: "actions/checkout@v4"}}, "")
+		want := []string{"actions/checkout@v4"}
+		if !stringSlicesEqual(got, want) {
+			t.Fatalf("expected official action flagged when trust off, got %v", got)
+		}
+	})
+
+	t.Run("minimum stars trusts popular, flags low-star, abstains on unknown", func(t *testing.T) {
+		cfg := map[string]any{
+			"githubActionMustComeFromAuthorizedSources": map[string]any{
+				"trustGithubOfficialActions": true,
+				"minimumStars":               100,
+				"trustedGithubActions":       []any{},
+			},
+		}
+		got := hits713(t, cfg, []ir.Action{
+			// 5000 stars is over the floor → trusted.
+			{Uses: "popular/action@v1", Metadata: &ir.ActionMetadata{StargazersCount: 5000}},
+			// 3 stars is below the floor → flagged.
+			{Uses: "tiny/action@v1", Metadata: &ir.ActionMetadata{StargazersCount: 3}},
+			// No metadata → no star data; falls back to the allowlist,
+			// which it is not in → flagged (for unauthorized source).
+			{Uses: "unknown/action@v1"},
+		}, "")
+		// popular is trusted by stars; tiny is below the floor; unknown
+		// has no star data and is in no allowlist, so it is flagged for
+		// being from an unauthorized source (NOT for missing stars).
+		want := []string{"tiny/action@v1", "unknown/action@v1"}
+		if !stringSlicesEqual(got, want) {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	})
+
+	t.Run("local and docker refs are exempt", func(t *testing.T) {
+		got := hits713(t, allowlistCfg, []ir.Action{
+			{Uses: "./.github/actions/local"},
+			{Uses: "docker://gcr.io/distroless/static@sha256:abc"},
+		}, "")
+		if len(got) != 0 {
+			t.Fatalf("expected local/docker refs exempt, got %v", got)
+		}
+	})
+
+	t.Run("reusable workflow from unauthorized source fires", func(t *testing.T) {
+		got := hits713(t, allowlistCfg, nil, "random/repo/.github/workflows/ci.yml@v1")
+		want := []string{"random/repo/.github/workflows/ci.yml@v1"}
+		if !stringSlicesEqual(got, want) {
+			t.Fatalf("expected reusable workflow flagged, got %v", got)
+		}
+	})
+
+	t.Run("reusable workflow under wildcard stays silent", func(t *testing.T) {
+		got := hits713(t, allowlistCfg, nil, "mycompany/repo/.github/workflows/ci.yml@v1")
+		if len(got) != 0 {
+			t.Fatalf("expected allowlisted reusable workflow silent, got %v", got)
+		}
+	})
+
+	t.Run("no config means the control is silent", func(t *testing.T) {
+		got := hits713(t, nil, []ir.Action{{Uses: "random/evil-action@v1"}}, "")
+		if len(got) != 0 {
+			t.Fatalf("expected silence without config, got %v", got)
+		}
+	})
+
+	// hits713Repo is hits713 with a scanned-repo projectPath, for the
+	// same-org trust path.
+	hits713Repo := func(t *testing.T, cfg map[string]any, projectPath string, actions []ir.Action) []string {
+		t.Helper()
+		pipeline := &ir.NormalizedPipeline{
+			Provider:    ir.ProviderGitHub,
+			ProjectPath: projectPath,
+			Jobs:        []ir.Job{{Name: "build", Uses: actions}},
+		}
+		findings, err := engine.Evaluate(context.Background(), pipeline, cfg)
+		if err != nil {
+			t.Fatalf("evaluate: %v", err)
+		}
+		var out []string
+		for _, f := range findings {
+			if f.Code != "ISSUE-713" {
+				continue
+			}
+			if uses, ok := f.Data["uses"].(string); ok {
+				out = append(out, uses)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+
+	// Default config: official trusted, same-org trusted (default), no
+	// allowlist, no star floor.
+	defaultCfg := map[string]any{
+		"githubActionMustComeFromAuthorizedSources": map[string]any{
+			"trustGithubOfficialActions": true,
+			"minimumStars":               0,
+		},
+	}
+
+	t.Run("same-org actions trusted by default, other orgs flagged", func(t *testing.T) {
+		got := hits713Repo(t, defaultCfg, "myorg/myrepo", []ir.Action{
+			{Uses: "myorg/internal-action@v1"}, // same org → trusted
+			{Uses: "myorg/tools/setup@abc123"}, // same org, composite → trusted
+			{Uses: "other-org/some-action@v1"}, // different org → flagged
+		})
+		want := []string{"other-org/some-action@v1"}
+		if !stringSlicesEqual(got, want) {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	})
+
+	t.Run("same-org match is case-insensitive", func(t *testing.T) {
+		got := hits713Repo(t, defaultCfg, "MyOrg/repo", []ir.Action{
+			{Uses: "myorg/action@v1"},
+		})
+		if len(got) != 0 {
+			t.Fatalf("expected case-insensitive same-org trust, got %v", got)
+		}
+	})
+
+	t.Run("same-org trust can be disabled", func(t *testing.T) {
+		cfg := map[string]any{
+			"githubActionMustComeFromAuthorizedSources": map[string]any{
+				"trustGithubOfficialActions": true,
+				"trustSameOrgActions":        false,
+				"minimumStars":               0,
+			},
+		}
+		got := hits713Repo(t, cfg, "myorg/myrepo", []ir.Action{{Uses: "myorg/internal-action@v1"}})
+		want := []string{"myorg/internal-action@v1"}
+		if !stringSlicesEqual(got, want) {
+			t.Fatalf("expected same-org flagged when trust off, got %v", got)
+		}
+	})
+
+	t.Run("same-org abstains when projectPath is unknown", func(t *testing.T) {
+		got := hits713Repo(t, defaultCfg, "", []ir.Action{{Uses: "myorg/internal-action@v1"}})
+		want := []string{"myorg/internal-action@v1"}
+		if !stringSlicesEqual(got, want) {
+			t.Fatalf("expected flagged with no projectPath, got %v", got)
 		}
 	})
 }

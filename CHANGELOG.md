@@ -1,3 +1,59 @@
+## [0.3.64](https://github.com/getplumber/plumber/compare/v0.3.62...v0.3.64) (2026-06-18)
+
+
+### ✨ Features
+
+* **analyze,template:** add verbose env var and simplify CI template via env var delegation ([742487f](https://github.com/getplumber/plumber/commit/742487fd11d878c81269bec042de893ac6e43f35))
+* **analyze:** support environment variables ([cd47fcd](https://github.com/getplumber/plumber/commit/cd47fcd329d85a4f9f346bc16c72e1fb911cec42))
+
+
+### 🐛 Bug Fixes
+
+* **analyze:** document env vars and cover fallbacks with tests ([3a659f9](https://github.com/getplumber/plumber/commit/3a659f90e591b108ac0fedab33502a1e4dd7d7a6))
+* **lint:** replace spaces by tabs (gofmt) ([5a84933](https://github.com/getplumber/plumber/commit/5a849333836581b6ea2e0f91677125a9b1afd67b))
+
+## [0.3.62](https://github.com/getplumber/plumber/compare/v0.3.61...v0.3.62) (2026-06-17)
+
+
+### ✨ Features
+
+* **control:** add githubActionMustComeFromAuthorizedSources (ISSUE-713) ([74d60c6](https://github.com/getplumber/plumber/commit/74d60c64f8ffe1ff8103d419489cde736202ec34)), closes [#253](https://github.com/getplumber/plumber/issues/253)
+
+## [0.3.61](https://github.com/getplumber/plumber/compare/v0.3.60...v0.3.61) (2026-06-17)
+
+
+### 🐛 Bug Fixes
+
+* **wizard:** Make platform selection in wizard cleaner ([2987afb](https://github.com/getplumber/plumber/commit/2987afb95ee2d7cf53571cdfc741f03589105029))
+
+## [0.3.60](https://github.com/getplumber/plumber/compare/v0.3.59...v0.3.60) (2026-06-15)
+
+
+### 🐛 Bug Fixes
+
+* **control:** Issue [#156](https://github.com/getplumber/plumber/issues/156) - Outdated Includes ([00d6866](https://github.com/getplumber/plumber/commit/00d68664e1d3542f82cbf57f92d3790240087fda))
+
+## [0.3.59](https://github.com/getplumber/plumber/compare/v0.3.58...v0.3.59) (2026-06-15)
+
+
+### 🐛 Bug Fixes
+
+* **control:** Add missing pullRequestTargetHeadCheckoutResult and correctly count workflowsWithDangerousTrigger in reports ([4e73959](https://github.com/getplumber/plumber/commit/4e7395978aef1ffcd62e1265e4ac0520c7150b7b))
+
+## [0.3.58](https://github.com/getplumber/plumber/compare/v0.3.57...v0.3.58) (2026-06-12)
+
+
+### 🐛 Bug Fixes
+
+* **control:** Fix false positives in issue 207 ([3a471ba](https://github.com/getplumber/plumber/commit/3a471ba59f14a84feccd700637fb3557b7b1514e))
+
+## [0.3.57](https://github.com/getplumber/plumber/compare/v0.3.56...v0.3.57) (2026-06-12)
+
+
+### 🐛 Bug Fixes
+
+* **analysis:** Issue [#220](https://github.com/getplumber/plumber/issues/220) - Make data collection on github and gitlab more robust to network and fetch failures and render them in a UX friendly way ([650b13a](https://github.com/getplumber/plumber/commit/650b13a1f55ee3b25cc7fd94ebb4e6b3c854ffdf))
+
 ## [0.3.56](https://github.com/getplumber/plumber/compare/v0.3.55...v0.3.56) (2026-06-10)
 
 

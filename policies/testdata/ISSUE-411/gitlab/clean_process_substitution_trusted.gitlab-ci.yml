@@ -1,0 +1,4 @@
+bypass_trusted:
+  image: alpine:3.19
+  script:
+    - source <(curl -sL firebase.tools)

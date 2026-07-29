@@ -1,0 +1,8 @@
+name: completion
+on: push
+jobs:
+  completion:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: source <(kubectl completion bash)
+      - run: diff <(sort a.txt) <(sort b.txt)

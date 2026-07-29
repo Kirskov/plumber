@@ -916,7 +916,31 @@ func TestIssue411_UnverifiedScripts(t *testing.T) {
 		// substitution ("$(curl ...)") is a real fetch and must fire
 		// despite the leading echo — the exemption checks the raw line.
 		{"violation_echo_quoted_curl_subst.gitlab-ci.yml", []string{"exfil"}},
+		// issue #307: process substitution feeds a remote fetch to an
+		// interpreter as a file argument — no pipe, `&&`, `;`, or
+		// redirect on the line, so the pre-fix patterns missed it.
+		{"violation_process_substitution_source.gitlab-ci.yml", []string{"bypass_source"}},
+		{"violation_process_substitution_dot.gitlab-ci.yml", []string{"bypass_dot"}},
+		{"violation_process_substitution_bash.gitlab-ci.yml", []string{"bypass_bash"}},
+		// issue #307: command substitution passed as the shell's command
+		// string. The fetch sits inside a quoted argument, so it is
+		// invisible to the quote-stripped `visible` line entirely.
+		{"violation_command_substitution_bash_c.gitlab-ci.yml", []string{"bypass_bash_c"}},
+		{"violation_command_substitution_eval.gitlab-ci.yml", []string{"bypass_eval"}},
 		{"clean_checksum.gitlab-ci.yml", nil},
+		// issue #307 FP guard: process substitution of a local/benign
+		// command (no curl/wget) must not fire.
+		{"clean_process_substitution_local.gitlab-ci.yml", nil},
+		// issue #307 FP guard: command substitution of local data (a
+		// variable, a local file) must not fire.
+		{"clean_command_substitution_local.gitlab-ci.yml", nil},
+		// issue #307 FP guard: a decoy mention of `source <(curl ...)`
+		// inside an instructional echo string must not fire — the real
+		// command is `echo`, not `source`.
+		{"clean_process_substitution_decoy_in_echo.gitlab-ci.yml", nil},
+		// issue #307 FP guard: a decoy mention of `eval "$(curl ...)"`
+		// inside an instructional echo string must not fire.
+		{"clean_command_substitution_decoy_in_echo.gitlab-ci.yml", nil},
 		// Regression for issue #236: echo/printf of in-workflow data
 		// piped into an interpreter is not a remote fetch.
 		{"clean_echo_var_pipe_python.gitlab-ci.yml", nil},
@@ -992,6 +1016,24 @@ func TestIssue411_UnverifiedScripts_TrustedHttpPrefixedHost(t *testing.T) {
 	}, cfg)
 }
 
+// TestIssue411_UnverifiedScripts_ProcessSubstitutionTrusted is a
+// regression for issue #307: trustedUrls suppression must still apply
+// when the fetch target is inside `<(...)` rather than piped directly,
+// since the trust-target extraction has to see into that construct too.
+func TestIssue411_UnverifiedScripts_ProcessSubstitutionTrusted(t *testing.T) {
+	cfg := map[string]any{
+		"unverifiedScripts": map[string]any{
+			"trustedUrls": []string{"firebase.tools", "firebase.tools/*"},
+		},
+	}
+	runGitLabPolicyCases(t, "ISSUE-411", []policyCase{
+		{"clean_process_substitution_trusted.gitlab-ci.yml", nil},
+		// Untrusted process substitution must still fire even when
+		// trustedUrls is configured for an unrelated host.
+		{"violation_process_substitution_source.gitlab-ci.yml", []string{"bypass_source"}},
+	}, cfg)
+}
+
 func TestIssue411_UnverifiedScripts_GitHub(t *testing.T) {
 	runGitHubFixtureCases(t, "ISSUE-411", []struct {
 		fixture      string
@@ -1011,7 +1053,30 @@ func TestIssue411_UnverifiedScripts_GitHub(t *testing.T) {
 		// issue #236 guard: curl hidden in a quoted command substitution
 		// is a real fetch and must fire despite the leading echo.
 		{"violation_echo_quoted_curl_subst.yml", []string{"violation_echo_quoted_curl_subst/exfil"}},
+		// issue #307: process substitution (`source <(curl ...)`,
+		// `bash <(curl ...)`) feeds a remote fetch to an interpreter as
+		// a file argument, with no pipe/&&/;/redirect on the line.
+		{"violation_process_substitution_source.yml", []string{"violation_process_substitution_source/bypass_source"}},
+		{"violation_process_substitution_bash.yml", []string{"violation_process_substitution_bash/bypass_bash"}},
+		// issue #307: command substitution passed as the shell's command
+		// string (`bash -c "$(curl ...)"`, `eval "$(curl ...)"`). The
+		// fetch is inside a quoted argument, invisible to the
+		// quote-stripped `visible` line.
+		{"violation_command_substitution_bash_c.yml", []string{"violation_command_substitution_bash_c/bypass_bash_c"}},
+		{"violation_command_substitution_eval.yml", []string{"violation_command_substitution_eval/bypass_eval"}},
 		{"clean_no_shell_pipes.yml", nil},
+		// issue #307 FP guard: process substitution of a local/benign
+		// command (no curl/wget) must not fire.
+		{"clean_process_substitution_local.yml", nil},
+		// issue #307 FP guard: command substitution of local data (a
+		// variable, a local file) must not fire.
+		{"clean_command_substitution_local.yml", nil},
+		// issue #307 FP guard: a decoy mention of `source <(curl ...)`
+		// inside an instructional echo string must not fire.
+		{"clean_process_substitution_decoy_in_echo.yml", nil},
+		// issue #307 FP guard: a decoy mention of `eval "$(curl ...)"`
+		// inside an instructional echo string must not fire.
+		{"clean_command_substitution_decoy_in_echo.yml", nil},
 		// Regression for issue #236 (electron pgo-generation.yml):
 		// echo/printf of in-workflow data piped into an interpreter
 		// is not a remote fetch.

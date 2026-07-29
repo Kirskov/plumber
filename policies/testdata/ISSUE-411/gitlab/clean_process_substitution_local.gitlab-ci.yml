@@ -1,0 +1,5 @@
+completion:
+  image: alpine:3.19
+  script:
+    - source <(kubectl completion bash)
+    - diff <(sort a.txt) <(sort b.txt)

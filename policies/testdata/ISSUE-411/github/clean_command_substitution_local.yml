@@ -1,0 +1,8 @@
+name: local_eval
+on: push
+jobs:
+  local_eval:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: bash -c "$LOCAL_SCRIPT_VAR"
+      - run: eval "$(cat local_functions.sh)"

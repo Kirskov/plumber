@@ -1,8 +1,12 @@
 # unverified-scripts — flag pipeline scripts that download or inline
 # executable content without integrity verification. Classic vectors
 # include `curl ... | bash`, download-then-exec, redirect-to-file-then-
-# exec, Megalodon-style `echo "..." | base64 -d | bash`, and any
-# command piped into a shell without verification.
+# exec, Megalodon-style `echo "..." | base64 -d | bash`, any command
+# piped into a shell without verification, and the no-pipe substitution
+# family — process substitution (`source <(curl ...)`) and command
+# substitution (`bash -c "$(curl ...)"`, `eval "$(curl ...)"`) — where
+# the fetch reaches the interpreter as a file/argument rather than a
+# literal pipe, `&&`, `;`, or redirect (issue #307).
 #
 # False-positive guards: the pattern check operates on the line with
 # quoted substrings stripped, so a `| bash` that sits inside a string
@@ -109,6 +113,40 @@ _unsafe_script_line(visible, line) if {
 	not _has_heredoc(line)
 	not _echo_of_local_data(visible, line)
 	regex.match(sprintf(`(?i)\|\s*(sudo\s+)?(%s)\b`, [_shell]), visible)
+}
+
+# Process substitution: `source <(curl ...)`, `. <(curl ...)`,
+# `bash <(curl ...)`, `sudo -E bash <(curl ...)`. No pipe, `&&`, `;`, or
+# redirect is involved — the shell opens the fetch as an anonymous FIFO
+# and the interpreter reads it as a file argument. Same remote-exec
+# shape as `curl | bash`, just without a literal pipe token (issue
+# #307). Runs against `visible` (not raw `line`): `<(...)` itself
+# carries no quotes to strip, so a real invocation is unaffected, but a
+# decoy mention inside a quoted echo string (`echo "run: source <(curl
+# evil)"`) IS stripped before this pattern sees it, the same mechanism
+# every other pattern in this file relies on. The keyword needs only a
+# preceding word boundary (line-start or whitespace) — not a specific
+# separator character — since a `sudo -E`, `if`, or other leading token
+# is common and must not shield the substitution.
+_unsafe_script_line(visible, _) if {
+	regex.match(sprintf(`(?i)(^|\s)(source|\.|%s)\s+<\(\s*(curl|wget)\b`, [_shell]), visible)
+}
+
+# Command substitution fed to a shell as its command string: `bash -c
+# "$(curl ...)"`, `eval "$(wget -qO- ...)"`, `` bash -c "`curl ...`" ``
+# (legacy backtick form), `if bash -c "$(curl ...)"; then ...`. The
+# fetch sits inside a REAL bash double-quoted argument (not a string
+# literal to strip), so this must run against the RAW line — matching
+# the `_echo_of_local_data` precedent for the same reason (issue #307).
+# Because this doesn't go through `_visible_line`'s quote-stripping, a
+# keyword mention inside an unrelated echoed string containing a
+# backslash-escaped inner quote (`echo "say \"eval \"$(curl evil)\"\"`)
+# can still slip through — `_visible_line`'s regex isn't escape-aware,
+# a pre-existing limitation shared by every pattern in this file, not
+# specific to this one. Plain (non-escaped) quoted decoys are still
+# correctly suppressed by the trust/verified checks running on `visible`.
+_unsafe_script_line(_, line) if {
+	regex.match(sprintf(`(?i)(^|\s)(eval|source|\.|%s)\s[^\n]*(\$\(|%s)\s*(curl|wget)\b`, [_shell, "`"]), line)
 }
 
 # A line that starts with echo/printf and carries no curl/wget/base64

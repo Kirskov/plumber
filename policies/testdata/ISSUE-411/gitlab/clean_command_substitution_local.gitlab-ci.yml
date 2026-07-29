@@ -1,5 +1,5 @@
 local_eval:
-  image: alpine:3.19
+  image: alpine:3.24
   script:
     - bash -c "$LOCAL_SCRIPT_VAR"
     - eval "$(cat local_functions.sh)"

